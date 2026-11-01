@@ -14,7 +14,8 @@
     "build:wtari": "graph build subgraph.wtari.yaml",
     "deploy:wtari:studio": "sh scripts/deploy-wtari.sh studio",
     "deploy:wtari:goldsky": "sh scripts/deploy-wtari.sh goldsky",
-    "sync-wtari-networks": "node --experimental-strip-types --no-warnings scripts/sync-wtari-networks.ts"
+    "sync-wtari-networks": "node --experimental-strip-types --no-warnings scripts/sync-wtari-networks.ts",
+    "test:scripts": "node --experimental-strip-types --no-warnings --test scripts/sync-wtari-networks.test.ts"
   },
   "dependencies": {
     "@graphprotocol/graph-cli": "0.98.1",
