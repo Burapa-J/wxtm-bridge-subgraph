@@ -63,4 +63,14 @@ The `base-sepolia` and `base` wTARIBridge entries in `networks.json` are placeho
 
 ### Retiring a chain
 
-Keep the chain's deployment running until every unwrap row for that chain is terminal. Then delete the deployment.
+This deployment is the backend's only source of `TokensUnwrapped` events for its chain. Any holder can burn through the bridge for as long as wTARI exists there. After the deployment is deleted, a later burn destroys the holder's wTARI and no payout is ever created. Retire the deployment only after all of the following hold:
+
+1. **No wTARI can be burned through the bridge.** On that chain, `wTARI.totalSupply()` is `0`, and either no new supply can appear or the burn path is closed:
+   - New supply: the chain is `disabled` in the backend registry (no new wraps), and `MINTER_ROLE` on `wTARI` is revoked from every minter (controller/Safe). Do not rely on the registry status alone.
+   - Burn path: `bridgeToTari` / `bridgeToTariWithAuthorization` are paused or revert. The current contracts have no pause, so this requires a reviewed proxy upgrade.
+
+   Check `totalSupply()` at a block that is past the chain's finality depth, not at `latest`.
+2. **The final burn is indexed and final.** The deployment has indexed past the block in step 1 by at least the chain's finality depth (`_meta { block { number } }`). Its last `TokensUnwrappedRecord` (highest nonce) is the bridge's last `TokensUnwrapped` log, checked independently with `eth_getLogs` against the bridge address from its start block. `nonce` is private in `wTARIBridge`, so there is no getter.
+3. **Every resulting payout is terminal.** The backend has ingested that final nonce, and every unwrap row for the chain is in a terminal state (paid, or explicitly resolved by an admin). No row is pending, held or awaiting approval.
+
+Until then, keep the indexer running even if the chain is `unwrap_only` or `disabled`. If a deployment was deleted early, redeploy it from the original start block before any further payouts on that chain.
