@@ -32,6 +32,8 @@ Prod runs on Goldsky under the name `wxtm-dev`. At its next redeploy, move it to
 
 The deployment name is `wtari-bridge-<network>`. The deploy scripts need `jq` and refuse a network whose `networks.json` entry is missing, has the zero address, or has start block 0.
 
+Each deploy copies the manifest, schema, ABIs, mappings and `networks.json` into a fresh temporary directory and runs codegen, build and upload there. The checkout's `subgraph.wtari.yaml` and `build/` are never touched, so concurrent deploys from one checkout cannot publish each other's build. `SIGINT`, `SIGTERM` or `SIGHUP` aborts the script with a non-zero status before the upload step. If the signal arrives while the upload command itself is running, check the remote deployment state before retrying.
+
 ```sh
 # The Graph Studio (dev). Authenticate first with `pnpm graph auth` (it prompts for the deploy key).
 pnpm deploy:wtari:studio -- --network base-sepolia [--version v0.0.1]

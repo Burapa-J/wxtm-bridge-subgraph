@@ -70,6 +70,41 @@ fi
 
 name="wtari-bridge-$network"
 
+# Build and deploy from a private copy of the sources so the checkout is never
+# modified. `graph build/deploy --network` rewrite the manifest and write
+# generated/ and build/; doing that in a per-run workspace means two
+# concurrent deploys cannot publish each other's build or leave a stale
+# manifest behind.
+repo_root=$(cd "$(dirname "$0")/.." && pwd)
+workspace=$(mktemp -d "${TMPDIR:-/tmp}/wtari-deploy.XXXXXX")
+cleanup() {
+  rm -rf "$workspace"
+}
+# Cleanup runs once. A signal stops the script before any further step, in
+# particular before the upload, and exits non-zero.
+on_signal() {
+  trap - EXIT HUP INT TERM
+  echo "deploy-wtari.sh: received SIG$1, aborting before deploy" >&2
+  cleanup
+  exit "$2"
+}
+trap cleanup EXIT
+trap 'on_signal HUP 129' HUP
+trap 'on_signal INT 130' INT
+trap 'on_signal TERM 143' TERM
+
+cp "$repo_root/subgraph.wtari.yaml" "$repo_root/schema.graphql" "$repo_root/networks.json" "$workspace/"
+cp -R "$repo_root/abis" "$repo_root/src" "$workspace/"
+if [ -e "$repo_root/package.json" ]; then
+  cp "$repo_root/package.json" "$workspace/"
+fi
+# graph-ts and the AssemblyScript compiler are resolved from node_modules.
+if [ -d "$repo_root/node_modules" ]; then
+  ln -s "$repo_root/node_modules" "$workspace/node_modules"
+fi
+cd "$workspace"
+
+# Validate the copy that will be built, not the live checkout.
 # Refuse placeholder or missing entries; run `pnpm sync-wtari-networks` first.
 if ! jq -e --arg n "$network" '
   type == "object" and has($n)
@@ -83,14 +118,6 @@ if ! jq -e --arg n "$network" '
   echo "networks.json: $network needs a wTARIBridge entry with exactly a non-zero 20-byte hex address and an integer startBlock > 0" >&2
   exit 1
 fi
-
-manifest_backup=$(mktemp "${TMPDIR:-/tmp}/subgraph.wtari.yaml.XXXXXX")
-cp subgraph.wtari.yaml "$manifest_backup"
-restore_manifest() {
-  cp "$manifest_backup" subgraph.wtari.yaml
-  rm -f "$manifest_backup"
-}
-trap restore_manifest EXIT INT TERM
 
 graph codegen subgraph.wtari.yaml
 
