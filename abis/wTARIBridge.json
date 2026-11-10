@@ -1,7 +1,23 @@
 [
   { "inputs": [], "stateMutability": "nonpayable", "type": "constructor" },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "target", "type": "address" }
+    ],
+    "name": "AddressEmptyCode",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "account", "type": "address" }
+    ],
+    "name": "AddressInsufficientBalance",
+    "type": "error"
+  },
+  { "inputs": [], "name": "FailedInnerCall", "type": "error" },
   { "inputs": [], "name": "InsufficientAmount", "type": "error" },
   { "inputs": [], "name": "InvalidInitialization", "type": "error" },
+  { "inputs": [], "name": "InvalidTargetTariAddress", "type": "error" },
   { "inputs": [], "name": "NotInitializing", "type": "error" },
   {
     "inputs": [
@@ -90,7 +106,7 @@
   },
   {
     "inputs": [
-      { "internalType": "address", "name": "_wXTM", "type": "address" }
+      { "internalType": "address", "name": "_wTARI", "type": "address" }
     ],
     "name": "initialize",
     "outputs": [],

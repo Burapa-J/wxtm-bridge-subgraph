@@ -33,6 +33,9 @@ jobs:
             echo "Building wTARI for $network"
             pnpm build:wtari --network "$network"
           done
+          git checkout -- subgraph.wtari.yaml
 
       - name: Test
-        run: pnpm test
+        run: |
+          pnpm test:scripts
+          pnpm test
