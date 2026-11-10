@@ -7,8 +7,14 @@ import {
 } from "matchstick-as/assembly/index";
 import { Address, BigInt, ethereum } from "@graphprotocol/graph-ts";
 import { handleTokensUnwrapped } from "../src/w-tari-bridge";
+import { handleTokensUnwrapped as handleWxtmTokensUnwrapped } from "../src/w-xtm-bridge";
+import {
+  buildTokensUnwrappedRecordId,
+  encodeTokensUnwrappedNotification,
+} from "../src/tokens-unwrapped";
 import { TokensUnwrappedRecord } from "../generated/schema";
 import { createTokensUnwrappedEvent } from "./w-tari-bridge-utils";
+import { createTokensUnwrappedEvent as createWxtmTokensUnwrappedEvent } from "./w-xtm-bridge-utils";
 
 describe("wTARI Bridge Entity Assertions", () => {
   afterAll(() => {
@@ -29,18 +35,33 @@ describe("wTARI Bridge Entity Assertions", () => {
 
     assert.entityCount("TokensUnwrappedRecord", 1);
 
-    let id =
-      event.transaction.hash.toHex() +
-      "-" +
-      event.logIndex.toString() +
-      "-" +
-      nonce.toString();
+    let id = buildTokensUnwrappedRecordId(
+      event.transaction.hash,
+      event.logIndex,
+      nonce
+    );
 
     assert.fieldEquals("TokensUnwrappedRecord", id, "contract", bridge.toHexString());
     assert.fieldEquals("TokensUnwrappedRecord", id, "nonce", "42");
     assert.fieldEquals("TokensUnwrappedRecord", id, "signature", "TokensUnwrapped");
+    assert.fieldEquals(
+      "TokensUnwrappedRecord",
+      id,
+      "transactionHash",
+      event.transaction.hash.toHexString()
+    );
+    assert.fieldEquals(
+      "TokensUnwrappedRecord",
+      id,
+      "logIndex",
+      event.logIndex.toString()
+    );
 
     let record = TokensUnwrappedRecord.load(id)!;
+    assert.bytesEquals(
+      record.transactionData!,
+      encodeTokensUnwrappedNotification(from, targetTariAddress, amount)
+    );
     let decoded = ethereum
       .decode("((address,string),uint256)", record.transactionData!)!
       .toTuple();
@@ -49,5 +70,44 @@ describe("wTARI Bridge Entity Assertions", () => {
     assert.addressEquals(sender[0].toAddress(), from);
     assert.stringEquals(sender[1].toString(), targetTariAddress);
     assert.bigIntEquals(decoded[1].toBigInt(), amount);
+  });
+
+  test("wTARI and wXTM handlers produce identical ABI payloads and distinct contract records", () => {
+    let wtariBridge = Address.fromString("0x3333333333333333333333333333333333333333");
+    let wxtmBridge = Address.fromString("0x4444444444444444444444444444444444444444");
+    let from = Address.fromString("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd");
+    let targetTariAddress = "tari1shared_handler_parity";
+    let amount = BigInt.fromString("18446744073709551615");
+    let wtariNonce = BigInt.fromI32(101);
+    let wxtmNonce = BigInt.fromI32(102);
+
+    let wtariEvent = createTokensUnwrappedEvent(from, targetTariAddress, amount, wtariNonce);
+    wtariEvent.address = wtariBridge;
+    wtariEvent.logIndex = BigInt.fromI32(10);
+
+    let wxtmEvent = createWxtmTokensUnwrappedEvent(from, targetTariAddress, amount, wxtmNonce);
+    wxtmEvent.address = wxtmBridge;
+    wxtmEvent.logIndex = BigInt.fromI32(11);
+
+    handleTokensUnwrapped(wtariEvent);
+    handleWxtmTokensUnwrapped(wxtmEvent);
+
+    let wtariId = buildTokensUnwrappedRecordId(
+      wtariEvent.transaction.hash,
+      wtariEvent.logIndex,
+      wtariNonce
+    );
+    let wxtmId = buildTokensUnwrappedRecordId(
+      wxtmEvent.transaction.hash,
+      wxtmEvent.logIndex,
+      wxtmNonce
+    );
+
+    let wtariRecord = TokensUnwrappedRecord.load(wtariId)!;
+    let wxtmRecord = TokensUnwrappedRecord.load(wxtmId)!;
+
+    assert.bytesEquals(wtariRecord.transactionData!, wxtmRecord.transactionData!);
+    assert.bytesEquals(wtariRecord.contract, wtariBridge);
+    assert.bytesEquals(wxtmRecord.contract, wxtmBridge);
   });
 });

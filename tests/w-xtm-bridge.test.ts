@@ -7,8 +7,13 @@ import {
   afterAll,
   logStore,
 } from "matchstick-as/assembly/index";
-import { Address, BigInt, Bytes } from "@graphprotocol/graph-ts";
+import { Address, BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts";
 import { handleTokensUnwrapped } from "../src/w-xtm-bridge";
+import {
+  buildTokensUnwrappedRecordId,
+  encodeTokensUnwrappedNotification,
+} from "../src/tokens-unwrapped";
+import { TokensUnwrappedRecord } from "../generated/schema";
 import { createTokensUnwrappedEvent } from "./w-xtm-bridge-utils";
 
 // Tests structure (matchstick-as >=0.5.0)
@@ -137,5 +142,46 @@ describe("wXTM Bridge Entity Assertions", () => {
       "signature",
       "TokensUnwrapped"
     );
+
+    let record3 = TokensUnwrappedRecord.load(expectedId3)!;
+    assert.bytesEquals(
+      record3.transactionData!,
+      encodeTokensUnwrappedNotification(from3, targetTariAddress3, amount3)
+    );
+    let decoded3 = ethereum
+      .decode("((address,string),uint256)", record3.transactionData!)!
+      .toTuple();
+    let sender3 = decoded3[0].toTuple();
+    assert.addressEquals(sender3[0].toAddress(), from3);
+    assert.stringEquals(sender3[1].toString(), targetTariAddress3);
+    assert.bigIntEquals(decoded3[1].toBigInt(), amount3);
+    assert.stringEquals(
+      buildTokensUnwrappedRecordId(
+        thirdTokensUnwrappedEvent.transaction.hash,
+        thirdTokensUnwrappedEvent.logIndex,
+        nonce3
+      ),
+      expectedId3
+    );
+
+    // Same transaction hash and nonce with a distinct logIndex produces a separate record
+    let sameTxDifferentLogEvent = createTokensUnwrappedEvent(
+      from3,
+      targetTariAddress3,
+      amount3,
+      nonce3
+    );
+    sameTxDifferentLogEvent.transaction.hash = thirdTokensUnwrappedEvent.transaction.hash;
+    sameTxDifferentLogEvent.logIndex = BigInt.fromI32(4);
+
+    handleTokensUnwrapped(sameTxDifferentLogEvent);
+
+    assert.entityCount("TokensUnwrappedRecord", 4);
+    let expectedId4 = buildTokensUnwrappedRecordId(
+      sameTxDifferentLogEvent.transaction.hash,
+      sameTxDifferentLogEvent.logIndex,
+      nonce3
+    );
+    assert.fieldEquals("TokensUnwrappedRecord", expectedId4, "logIndex", "4");
   });
 });

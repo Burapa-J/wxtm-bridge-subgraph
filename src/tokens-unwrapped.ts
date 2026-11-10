@@ -1,6 +1,14 @@
 import { TokensUnwrappedRecord } from "../generated/schema";
 import { Address, Bytes, ethereum, BigInt } from "@graphprotocol/graph-ts";
 
+export function buildTokensUnwrappedRecordId(
+  transactionHash: Bytes,
+  logIndex: BigInt,
+  nonce: BigInt
+): string {
+  return `${transactionHash.toHex()}-${logIndex.toString()}-${nonce.toString()}`;
+}
+
 // Shared by the wXTMBridge and wTARIBridge handlers; both emit the same TokensUnwrapped event.
 export function saveTokensUnwrappedRecord(
   event: ethereum.Event,
@@ -26,7 +34,7 @@ function insertTokensUnwrappedRecord(
   transactionData: Bytes
 ): void {
   let tokensUnwrappedRecord = new TokensUnwrappedRecord(
-    `${event.transaction.hash.toHex()}-${event.logIndex.toString()}-${nonce.toString()}`
+    buildTokensUnwrappedRecordId(event.transaction.hash, event.logIndex, nonce)
   );
 
   tokensUnwrappedRecord.nonce = nonce;
@@ -42,7 +50,7 @@ function insertTokensUnwrappedRecord(
   tokensUnwrappedRecord.save();
 }
 
-function encodeTokensUnwrappedNotification(
+export function encodeTokensUnwrappedNotification(
   from: Address,
   targetTariAddress: string,
   amount: BigInt
